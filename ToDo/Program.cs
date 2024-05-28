@@ -1,3 +1,5 @@
+using ToDo.Controllers;
+
 namespace ToDo
 {
     public class Program
@@ -11,6 +13,8 @@ namespace ToDo
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 
+            builder.Services.AddTransient<IDateService, AmericanDate>(); //внедрение зависимостей
+
             var app = builder.Build();
 
             // Configure the HTTP request pipeline.
@@ -19,7 +23,7 @@ namespace ToDo
                 app.UseExceptionHandler("/Home/Error");
                 // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
                 app.UseHsts();
-                app.UseSwagger();
+                app.UseSwagger(); //swagger
                 app.UseSwaggerUI();
             }
 
@@ -32,8 +36,7 @@ namespace ToDo
 
             app.MapControllerRoute(
                 name: "default",
-                pattern: "{controller=Home}/{action=Index}/{id?}");
-
+                pattern: "{controller=Home}/{action=Index}/{id?}"); //маршрутизация
 
             app.Run();
         }

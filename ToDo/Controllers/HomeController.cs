@@ -1,163 +1,154 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using System.Data;
+using System;
 using System.Diagnostics;
+using ToDo;
 using ToDo.Models;
 using ToDo.Models.ViewModels;
+using Azure;
+using System.IO;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ToDo.Controllers
 {
+    public interface IDateService
+    {
+        string GetDate();
+    }
+
+    public class RussianDate : IDateService
+    {
+        public string GetDate()
+        {
+            DateTime now = DateTime.Now;
+            return now.ToString("dd-MM-yyyy hh:mm");
+        }
+    }
+
+    public class AmericanDate : IDateService
+    {
+        public string GetDate()
+        {
+            DateTime now = DateTime.Now;
+            return now.ToString("MM-dd-yyyy hh:mm");
+        }
+    }
+
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
 
-        public HomeController(ILogger<HomeController> logger)
+        private readonly IDateService _dateService;
+        public HomeController(ILogger<HomeController> logger, IDateService dateService)
         {
             _logger = logger;
+            _dateService = dateService;
         }
 
-        public IActionResult Index()
+        public async Task<IActionResult> Index()
         {
-            var todoListViewModel = GetAllTodos();
+            _logger.LogInformation("Executing Index action"); //логирование
+            var todoListViewModel = await GetAllTodos();
+            var date = _dateService.GetDate();
+            ViewData["date"] = date;
             return View(todoListViewModel);
         }
 
-        internal ToDoViewModel GetAllTodos()
+        public string GetDate()
         {
-            List<ToDoItem> todoList = new();
+            return _dateService.GetDate();
+        }
 
-            string connectionString = "Server=(localdb)\\mssqllocaldb;Database=todo;Trusted_Connection=True;";
-            using (SqlConnection connection = new SqlConnection(connectionString))
-            {
-                string query = "SELECT * FROM todo";
-                SqlCommand command = new SqlCommand(query, connection);
-                connection.Open();
-                using (var reader = command.ExecuteReader())
-                {
-                    if (reader.HasRows)
-                    {
-                        while (reader.Read())
-                        {
-                            todoList.Add(
-                                 new ToDoItem
-                                 {
-                                     Id = reader.GetInt32(0),
-                                     Name = reader.GetString(1)
-                                 });
-                        }
-                    }
-                    else
-                    {
-                        return new ToDoViewModel
-                        {
-                            ToDoList = todoList
-                        };
-                    }
-                }
-            }
+        public string GetTime()
+        {
+            return DateTime.Now.ToShortTimeString();
+        }
 
+        internal async Task<ToDoViewModel> GetAllTodos()
+        {
+            await using var db = new ApplicationDbContext();
+            var todoList = await db.ToDos.ToListAsync();
             return new ToDoViewModel
             {
                 ToDoList = todoList
             };
         }
 
-        public RedirectResult Insert(ToDoItem todo)
+        public async Task<RedirectResult> Insert(ToDoItem todo)
         {
-            string connectionString = "Server=(localdb)\\mssqllocaldb;Database=todo;Trusted_Connection=True;";
-            SqlConnection connection = new SqlConnection(connectionString);
-            string query = $"INSERT INTO todo (Name) VALUES ('{todo.Name}')";
-            SqlCommand command = new(query, connection);
-            try
-            {
-                connection.Open();
-                command.ExecuteNonQuery();
-                Console.WriteLine("Records Inserted Successfully");
-            }
-            catch (SqlException ex)
-            {
-                Console.WriteLine("Error Generated. Details: " + ex.ToString());
-            }
-            finally
-            {
-                connection.Close();
-            }
+            await using var db = new ApplicationDbContext();
+            _logger.LogInformation("Executing Insert action");
+
+            await db.ToDos.AddRangeAsync(todo);
+            await db.SaveChangesAsync();
 
             return Redirect("https://localhost:7077/");
         }
 
         [HttpPost]
-        public JsonResult Delete(int id)
+        public async Task<JsonResult> Delete(int id)
         {
-            string connectionString = "Server=(localdb)\\mssqllocaldb;Database=todo;Trusted_Connection=True;";
-            using (SqlConnection connection = new SqlConnection(connectionString))
-            {
-                connection.Open();
-                string query = $"DELETE from todo WHERE Id = '{id}'";
-                SqlCommand command = new(query, connection);
-                command.ExecuteNonQuery();
-                Console.WriteLine("Строка удалена");
-            }
+            _logger.LogInformation("Executing Delete action");
+
+            await using var db = new ApplicationDbContext();
+            var todo = db.ToDos.First(x => x.Id == id);
+            db.Remove(todo);
+            await db.SaveChangesAsync();
+
             return Json(new { });
         }
 
-        internal ToDoItem GetById(int id)
+        internal async Task<ToDoItem> GetById(int id)
         {
-            ToDoItem todo = new();
-
-            string connectionString = "Server=(localdb)\\mssqllocaldb;Database=todo;Trusted_Connection=True;";
-            using (SqlConnection connection = new SqlConnection(connectionString))
-            {
-                string query = $"SELECT * FROM todo Where Id = '{id}'";
-                SqlCommand command = new SqlCommand(query, connection);
-                connection.Open();
-                using (var reader = command.ExecuteReader())
-                {
-                    if (reader.HasRows)
-                    {
-                        reader.Read();
-                        todo.Id = reader.GetInt32(0);
-                        todo.Name = reader.GetString(1);
-
-                    }
-                    else
-                    {
-                        return todo;
-                    }
-                }
-            }
-
+            await using var db = new ApplicationDbContext();
+            var todo = db.ToDos.First(x => x.Id == id);
             return todo;
         }
 
-        public RedirectResult Update(ToDoItem todo)
+        public async Task<RedirectResult> Update(ToDoItem todo)
         {
-            string connectionString = "Server=(localdb)\\mssqllocaldb;Database=todo;Trusted_Connection=True;";
-            SqlConnection connection = new SqlConnection(connectionString);
-            string query = $"UPDATE todo SET name = '{todo.Name}' WHERE Id = '{todo.Id}'";
-            SqlCommand command = new(query, connection);
-            try
-            {
-                connection.Open();
-                command.ExecuteNonQuery();
-            }
-            catch (SqlException ex)
-            {
-                Console.WriteLine("Error Generated. Details: " + ex.ToString());
-            }
-            finally
-            {
-                connection.Close();
-            }
+            _logger.LogInformation("Executing Update action");
+
+            await using var db = new ApplicationDbContext();
+            var toDo = db.ToDos.First(x => x.Id == todo.Id);
+            toDo.Name = todo.Name;
+            db.ToDos.Update(toDo);
+            await db.SaveChangesAsync();
 
             return Redirect("https://localhost:7077/");
         }
 
         [HttpGet]
-        public JsonResult PopulateForm(int id)
+        public async Task<JsonResult> PopulateForm(int id)
         {
-            var todo = GetById(id);
+            var todo = await GetById(id);
             return Json(todo);
         }
+
+        public async Task<IActionResult> Download()
+        {
+            var file = Request.Form.Files[0];
+            if (file == null || file.Length == 0)
+                return BadRequest("File is not selected");
+
+            var uploadPath = $"{Directory.GetCurrentDirectory()}/uploads";
+            // создаем папку для хранения файлов
+            Directory.CreateDirectory(uploadPath);
+
+            string fullPath = $"{uploadPath}/{file.FileName}";
+
+            
+            // сохраняем файл в папку uploads
+            using (var fileStream = new FileStream(fullPath, FileMode.Create))
+            {
+                await file.CopyToAsync(fileStream);
+            }
+            
+
+            return Ok(file.FileName + " uploaded successfully " + "file location is " + uploadPath);
+        }
     }
+
 }

@@ -1,5 +1,8 @@
 ﻿@model ToDoViewModel
 @{
+    <h2>Сегодняшняя дата: @ViewData["date"]</h2>
+    @Html.Partial("_Form")
+
     <table class="table">
         <thead>
             <tr class="table-primary">
@@ -23,4 +26,17 @@
             }
         </tbody>
     </table>
+
+    <h2>Выберите файл для загрузки</h2>
+    <form asp-action="Download" method="post" enctype="multipart/form-data">
+        <input type="file" name="uploads" /><br>
+        <input type="submit" value="Загрузить" />
+    </form>
+
+    /*using (Html.BeginForm("Download", "Home", FormMethod.Post, new { enctype = "multipart/form-data" }))
+    {
+        <input type="file" name="fileUpload" />
+        <br />
+        <input type="submit" name="Submit" id="SubmitSingle" value="Upload" />
+    }*/
 }
